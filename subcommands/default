@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/config"
+set -eo pipefail; [[ $DOKKU_TRACE ]] && set -x
+source "$PLUGIN_BASE_PATH/common/functions"
+source "$PLUGIN_BASE_PATH/deploy-from-registry/internal-functions"
+
+cmd-deploy-from-registry-default() {
+  local cmd="$PLUGIN_COMMAND_PREFIX" argv=("$@"); [[ ${argv[0]} == "$cmd" ]] && shift 1
+  declare APP="$1" TAG="$2"
+  [[ -z "$APP" ]] && dokku_log_fail "Please specify an app to run the command on"
+  [[ -z "$TAG" ]] && dokku_log_fail "Please specify an image tag to pull"
+  verify_app_name "$APP"
+
+  REMOTE_IMAGE_REPO=$(fn-config-read "$APP" "remote-image-repo")
+  if [[ -z "$REMOTE_IMAGE_REPO" ]]; then
+  	dokku_log_warn_quiet "Remote image repo not configured for $APP"
+  	dokku_log_warn_quiet "Use ${PLUGIN_COMMAND_PREFIX}:set-remote-image-repo to set it"
+  	dokku_log_fail "Deploy failed"
+  fi
+
+  fn-pull-and-deploy "$APP" "$REMOTE_IMAGE_REPO" "$TAG"
+}
+
+cmd-deploy-from-registry-default "$@"

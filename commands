@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/config"
+[[ " help ${PLUGIN_COMMAND_PREFIX}:help " == *" $1 "* ]] || [[ "$1" == "${PLUGIN_COMMAND_PREFIX}:"* ]] || exit "$DOKKU_NOT_IMPLEMENTED_EXIT"
+source "$PLUGIN_BASE_PATH/common/functions"
+set -eo pipefail; [[ $DOKKU_TRACE ]] && set -x
+
+fn-help-content() {
+  cat <<help_content
+    $PLUGIN_COMMAND_PREFIX <app> <tag>, Pull and deploy
+    ${PLUGIN_COMMAND_PREFIX}:get-remote-image-repo <app>, Get image repo
+    ${PLUGIN_COMMAND_PREFIX}:set-remote-image-repo <app> <repo>, Set image repo to pull from
+    ${PLUGIN_COMMAND_PREFIX}:unset-remote-image-repo <app>, Unset image repo
+help_content
+}
+
+fn-help() {
+  if [[ $1 == "${PLUGIN_COMMAND_PREFIX}:help" ]]; then
+    echo "Usage: dokku ${PLUGIN_COMMAND_PREFIX}[:COMMAND]"
+    echo ""
+    echo "Pull and deploy from a Docker Registry in one go."
+    echo "First, set the remote image repo, like so:"
+    echo "    $ dokku ${PLUGIN_COMMAND_PREFIX}:set-remote-image-repo some-app registry.example.com/my-org/my-app"
+    echo "Then you can run"
+    echo "    $ dokku $PLUGIN_COMMAND_PREFIX some-app a1b2c3"
+    echo "to pull that tag and deploy it."
+    echo ""
+    echo "dokku $PLUGIN_COMMAND_PREFIX commands:"
+    fn-help-content | sort | column -c2 -t -s,
+  elif [[ $(ps -o command= $PPID) == *"--all"* ]]; then
+    fn-help-content
+  else
+    cat <<help_desc
+    $PLUGIN_COMMAND_PREFIX, Pull and deploy from a Docker Registry in one go.
+help_desc
+  fi
+}
+
+case "$1" in
+  help | "${PLUGIN_COMMAND_PREFIX}:help")
+    fn-help "$@"
+    ;;
+
+  *)
+    exit "$DOKKU_NOT_IMPLEMENTED_EXIT"
+    ;;
+esac

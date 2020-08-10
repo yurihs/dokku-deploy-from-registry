@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/config"
+set -eo pipefail; [[ $DOKKU_TRACE ]] && set -x
+source "$PLUGIN_BASE_PATH/common/functions"
+
+fn-config-read() {
+  declare APP="$1" KEY="$2"
+  [[ ! -f "$PLUGIN_CONFIG_ROOT/$APP/$KEY" ]] && return
+  cat "$PLUGIN_CONFIG_ROOT/$APP/$KEY"
+}
+
+fn-config-write() {
+  declare APP="$1" KEY="$2" VALUE="$3"
+  mkdir -p "$PLUGIN_CONFIG_ROOT/$APP"
+  echo "$VALUE" >"$PLUGIN_CONFIG_ROOT/$APP/$KEY"
+  chmod 600 "$PLUGIN_CONFIG_ROOT/$APP/$KEY"
+}
+
+fn-config-delete() {
+  declare APP="$1" KEY="$2"
+  rm -f "$PLUGIN_CONFIG_ROOT/$APP/$KEY"
+}
+
+fn-config-destroy() {
+  declare APP="$1" KEY="$2"
+  rm -rf "${PLUGIN_CONFIG_ROOT:?}/$APP"
+}
+
+fn-verify-image-repo() {
+  declare VALUE="$1"
+  echo "$VALUE" | grep -E ':[^/]*$' >/dev/null 2>&1 && dokku_log_fail "The image repo value should not end with a tag"
+  echo "$VALUE" | grep -xE '[a-zA-Z0-9_.:/-]+' >/dev/null 2>&1 || dokku_log_fail "Image repo contains invalid characters"
+}
+
+fn-pull-and-deploy() {
+  declare APP="$1" REMOTE_IMAGE_REPO="$2" TAG="$3"
+  local REMOTE_IMAGE_NAME LOCAL_IMAGE_REPO LOCAL_IMAGE_NAME DOKKU_SCHEDULER
+
+  REMOTE_IMAGE_NAME="${REMOTE_IMAGE_REPO}:$TAG"
+  dokku_log_info1_quiet "Pulling $REMOTE_IMAGE_NAME"
+  "$DOCKER_BIN" pull "$REMOTE_IMAGE_NAME"
+
+  LOCAL_IMAGE_REPO=$(get_app_image_repo "$APP")
+  dokku_log_verbose_quiet "Tagging $REMOTE_IMAGE_NAME as ${LOCAL_IMAGE_REPO}:$TAG"
+  "$DOCKER_BIN" tag "$REMOTE_IMAGE_NAME" "${LOCAL_IMAGE_REPO}:$TAG"
+
+  LOCAL_IMAGE_NAME="$(get_app_image_name "$APP" "$TAG")"
+  verify_image "$LOCAL_IMAGE_NAME" || dokku_log_fail "Failed to find $LOCAL_IMAGE_NAME"
+  release_and_deploy "$APP" "$TAG"
+
+  if [[ "$TAG" != "latest" ]]; then
+    dokku_log_verbose_quiet "Tagging $LOCAL_IMAGE_NAME as ${LOCAL_IMAGE_REPO}:latest"
+    DOKKU_SCHEDULER="$(get_app_scheduler "$APP")"
+    plugn trigger scheduler-tags-create "$DOKKU_SCHEDULER" "$APP" "$LOCAL_IMAGE_NAME" "${LOCAL_IMAGE_REPO}:latest"
+  fi
+
+  dokku_log_info1_quiet "Deployed $LOCAL_IMAGE_NAME successfully"
+}

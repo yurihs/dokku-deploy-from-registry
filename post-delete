@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/config"
+source "$PLUGIN_BASE_PATH/deploy-from-registry/internal-functions"
+set -eo pipefail; [[ $DOKKU_TRACE ]] && set -x
+
+registry-post-delete() {
+  declare APP="$1"
+  fn-config-destroy "$APP"
+}
+
+registry-post-delete "$@"

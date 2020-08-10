@@ -1,0 +1,4 @@
+[plugin]
+description = "Pull and deploy from a Docker Registry in one go"
+version = "1.0.0"
+[plugin.config]
